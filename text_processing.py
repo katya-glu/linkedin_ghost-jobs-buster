@@ -5,26 +5,37 @@ class TextProcessor:
     val_for_text_slicing = 4
     alphabet_str = "abcdefghijklmnopqrstuvwxyz"
     lowest_bits_num = 4
-    slice_len = 2
+    slice_len = 3
+    full_hash_val = True
+    partial_hash_val = False
 
     def __init__(self, input_text):
         self.input_text = input_text
         self.text_slices_list_for_hashing = []
+        self.hashed_slices_list = []
 
-    def calculate_hash_val(self, sequence):
+
+    def calculate_hash_val(self, sequence, full_hash_val):
         sequence = sequence.encode()
-        hashed_chars_pair = zlib.crc32(sequence)
-        hashed_chars_pair_int_4_lowest_bits = hashed_chars_pair & ((2 ** self.lowest_bits_num) - 1)
+        hashed_chars_sequence = zlib.crc32(sequence)
+        if full_hash_val:
+            return hashed_chars_sequence
+
+        hashed_chars_pair_int_4_lowest_bits = hashed_chars_sequence & ((2 ** self.lowest_bits_num) - 1)
         return hashed_chars_pair_int_4_lowest_bits
+
 
     def get_indices_for_slicing(self):
         indices_for_slicing = [0]
         for index in range(0, len(self.input_text)-self.slice_len+1):
             curr_chars_pair = self.input_text[index:index+self.slice_len]
-            hashed_chars_pair_int_4_lowest_bits = self.calculate_hash_val(curr_chars_pair)
-            if hashed_chars_pair_int_4_lowest_bits == self.val_for_text_slicing and indices_for_slicing[-1] != index-1:
+            hashed_chars_seq_lowest_bits = self.calculate_hash_val(curr_chars_pair, self.partial_hash_val)
+            if hashed_chars_seq_lowest_bits == self.val_for_text_slicing and indices_for_slicing[-1] <= index-self.slice_len+1:
                 indices_for_slicing.append(index)
+        print(indices_for_slicing)
+
         return indices_for_slicing
+
 
     def create_text_slices_list_for_hashing(self):
         indices_for_slicing = self.get_indices_for_slicing()
@@ -37,6 +48,13 @@ class TextProcessor:
             curr_text_slice = self.input_text[curr_str_index:next_str_index]
             self.text_slices_list_for_hashing.append(curr_text_slice)
 
+
+    def create_hashed_slices_list(self):
+        for slice in self.text_slices_list_for_hashing:
+            curr_slice_hash_val = self.calculate_hash_val(slice, self.full_hash_val)
+            self.hashed_slices_list.append(curr_slice_hash_val)
+
+
     # for DEBUG
     def get_sequences_for_text_slicing_val(self):
         self.sequences_list = []
@@ -45,20 +63,21 @@ class TextProcessor:
             for index_2 in range(len(self.alphabet_str)):
                 curr_element2 = self.alphabet_str[index_2]
                 curr_seq = curr_element1 + curr_element2
-                hashed_chars_pair_int_4_lowest_bits = self.calculate_hash_val(curr_seq)
-                if hashed_chars_pair_int_4_lowest_bits == self.val_for_text_slicing:
+                hashed_chars_seq_lowest_bits = self.calculate_hash_val(curr_seq, self.partial_hash_val)
+                if hashed_chars_seq_lowest_bits == self.val_for_text_slicing:
                     self.sequences_list.append(curr_seq)
+
 
 with open('test.txt', 'r') as f:
     text = f.read()
 text_processor = TextProcessor(text)
 text_processor.create_text_slices_list_for_hashing()
 text_processor.get_sequences_for_text_slicing_val()
+text_processor.create_hashed_slices_list()
 
 # Debug Zone
 print("Slices list length", len(text_processor.text_slices_list_for_hashing))
 print("Text length:", len(text))
-"""for item in text_processor.text_slices_list_for_hashing:
-    print(item)
-"""
+"""for item in text_processor.hashed_slices_list:
+    print(item)"""
 
