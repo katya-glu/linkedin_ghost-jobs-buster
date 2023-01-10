@@ -1,4 +1,7 @@
 import zlib
+import os
+import pickle
+
 
 class TextProcessor:
     # consts
@@ -8,12 +11,14 @@ class TextProcessor:
     slice_len = 3
     full_hash_val = True
     partial_hash_val = False
+    db_dict_path = 'job_listings_db'
 
     def __init__(self, input_text):
         self.input_text = input_text
         self.text_slices_list_for_hashing = []
         self.hashed_slices_list = []
-
+        self.data_storage_dict = {}
+        self.load_db_dict()
 
     def calculate_hash_val(self, sequence, full_hash_val):
         sequence = sequence.encode()
@@ -50,9 +55,25 @@ class TextProcessor:
 
 
     def create_hashed_slices_list(self):
-        for slice in self.text_slices_list_for_hashing:
-            curr_slice_hash_val = self.calculate_hash_val(slice, self.full_hash_val)
+        for text_slice in self.text_slices_list_for_hashing:
+            curr_slice_hash_val = self.calculate_hash_val(text_slice, self.full_hash_val)
             self.hashed_slices_list.append(curr_slice_hash_val)
+
+
+    def load_db_dict(self):
+        if os.path.exists(self.db_dict_path):   # TODO: consider using try except
+            with open(self.db_dict_path, 'rb') as db_file:
+                self.data_storage_dict = pickle.load(db_file)
+
+
+    def update_db_entry(self, company_name, job_listing):   # job_listing is an object
+        if company_name in self.data_storage_dict:
+            self.data_storage_dict[company_name].append(job_listing)
+        else:
+            self.data_storage_dict[company_name] = [job_listing]
+
+        with open(self.db_dict_path, "wb") as score_file:       # TODO: check if possible
+            pickle.dump(self.data_storage_dict, score_file)
 
 
     # for DEBUG
@@ -74,6 +95,9 @@ text_processor = TextProcessor(text)
 text_processor.create_text_slices_list_for_hashing()
 text_processor.get_sequences_for_text_slicing_val()
 text_processor.create_hashed_slices_list()
+#text_processor.update_db_entry("intel", "hash")
+new = TextProcessor("bbbb")
+print(new.data_storage_dict)
 
 # Debug Zone
 print("Slices list length", len(text_processor.text_slices_list_for_hashing))
