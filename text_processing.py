@@ -1,7 +1,8 @@
 import zlib
 import os
 import pickle
-
+import crawler
+import time
 
 class TextProcessor:
     # consts
@@ -11,14 +12,22 @@ class TextProcessor:
     slice_len = 3
     full_hash_val = True
     partial_hash_val = False
-    db_dict_path = 'job_listings_db'
+    approximate_match_db_dict_path = 'job_listings_db'
+    exact_match_db_dict_path = 'job_listings_exact_match_db'
 
-    def __init__(self, input_text):
-        self.input_text = input_text
+    def __init__(self):
+        self.input_text = ""    # TODO: change to input list with job listings
         self.text_slices_list_for_hashing = []
         self.hashed_slices_list = []
-        self.data_storage_dict = {}
-        self.load_db_dict()
+        self.approximate_match_db_dict = {}
+        self.exact_match_db_dict = {}
+        self.load_db_dict(self.approximate_match_db_dict, self.approximate_match_db_dict_path)
+        self.load_db_dict(self.exact_match_db_dict, self.exact_match_db_dict_path)
+
+
+        # DEBUG
+        self.debug_linkedin_list = []
+
 
     def calculate_hash_val(self, sequence, full_hash_val):
         sequence = sequence.encode()
@@ -30,20 +39,20 @@ class TextProcessor:
         return hashed_chars_pair_int_4_lowest_bits
 
 
-    def get_indices_for_slicing(self):
+    def get_indices_for_slicing(self, input_text):
         indices_for_slicing = [0]
-        for index in range(0, len(self.input_text)-self.slice_len+1):
+        for index in range(0, len(input_text)-self.slice_len+1):
             curr_chars_pair = self.input_text[index:index+self.slice_len]
             hashed_chars_seq_lowest_bits = self.calculate_hash_val(curr_chars_pair, self.partial_hash_val)
             if hashed_chars_seq_lowest_bits == self.val_for_text_slicing and indices_for_slicing[-1] <= index-self.slice_len+1:
                 indices_for_slicing.append(index)
-        print(indices_for_slicing)
+        #print("DEBUG: indices_for_slicing: ", indices_for_slicing)
 
         return indices_for_slicing
 
 
-    def create_text_slices_list_for_hashing(self):
-        indices_for_slicing = self.get_indices_for_slicing()
+    def create_text_slices_list_for_hashing(self, input_text):
+        indices_for_slicing = self.get_indices_for_slicing(input_text)
         for index in range(len(indices_for_slicing)):
             curr_str_index = indices_for_slicing[index]
             try:
@@ -60,23 +69,45 @@ class TextProcessor:
             self.hashed_slices_list.append(curr_slice_hash_val)
 
 
-    def load_db_dict(self):
-        if os.path.exists(self.db_dict_path):   # TODO: consider using try except
-            with open(self.db_dict_path, 'rb') as db_file:
-                self.data_storage_dict = pickle.load(db_file)
+    def load_db_dict(self, db_dict, db_dict_path):
+        # func loads db_dict from pickle file
+        if os.path.exists(db_dict_path):   # TODO: consider using try except
+            with open(db_dict_path, 'rb') as db_file:
+                db_dict = pickle.load(db_file)
 
 
-    def update_db_entry(self, company_name, job_listing):   # job_listing is an object
-        if company_name in self.data_storage_dict:
-            self.data_storage_dict[company_name].append(job_listing)
-        else:
-            self.data_storage_dict[company_name] = [job_listing]
+    def update_db_entry(self, db_to_update, company_name, job_title, job_description):  # TODO: debug func
+        # func updates desired db_dict - approximate db is updated with
+        if db_to_update == self.approximate_match_db_dict:
+            self.create_text_slices_list_for_hashing(job_description)
+            self.create_hashed_slices_list()
+            if company_name in self.approximate_match_db_dict:
+                self.approximate_match_db_dict[company_name].append(self.hashed_slices_list)
+            else:
+                self.approximate_match_db_dict[company_name] = [self.hashed_slices_list]
+            with open(self.approximate_match_db_dict_path, "wb") as db_dict_file:  # TODO: check if possible, check if needed to separate
+                pickle.dump(self.approximate_match_db_dict, db_dict_file)
 
-        with open(self.db_dict_path, "wb") as score_file:       # TODO: check if possible
-            pickle.dump(self.data_storage_dict, score_file)
+        else:       # db_to_update == self.exact_match_db_dict
+            job_title_hash = self.calculate_hash_val(job_title, self.full_hash_val)
+            job_description_hash = self.calculate_hash_val(job_description, self.full_hash_val)
+            job_title_description_hash_tuple = (job_title_hash, job_description_hash)
+            if company_name in self.exact_match_db_dict:
+                self.exact_match_db_dict[company_name].append(job_title_description_hash_tuple)
+            else:
+                self.exact_match_db_dict[company_name] = [job_title_description_hash_tuple]
+
+            with open(self.exact_match_db_dict_path, "wb") as db_dict_file:       # TODO: check if possible, check if needed to separate
+                pickle.dump(self.exact_match_db_dict, db_dict_file)
+
+    def save_db_dict_to_pickle_file(self, db_dict, db_dict_path):
+        # func saves db_dict to pickle file
+        if not os.path.exists(db_dict_path):  # TODO: consider using try except
+            with open(db_dict_path, 'wb') as db_dict_file:
+                pickle.dump(db_dict, db_dict_file)
 
 
-    # for DEBUG
+    """DEBUG SECTION"""
     def get_sequences_for_text_slicing_val(self):
         self.sequences_list = []
         for index_1 in range(len(self.alphabet_str)):
@@ -89,19 +120,66 @@ class TextProcessor:
                     self.sequences_list.append(curr_seq)
 
 
-with open('test.txt', 'r') as f:
-    text = f.read()
-text_processor = TextProcessor(text)
-text_processor.create_text_slices_list_for_hashing()
-text_processor.get_sequences_for_text_slicing_val()
-text_processor.create_hashed_slices_list()
-#text_processor.update_db_entry("intel", "hash")
-new = TextProcessor("bbbb")
-print(new.data_storage_dict)
+    def save_debug_list_to_pickle_file(self, debug_list, filename):
+        with open(filename, "wb") as debug_list_file:
+            pickle.dump(debug_list, debug_list_file)
 
-# Debug Zone
-print("Slices list length", len(text_processor.text_slices_list_for_hashing))
-print("Text length:", len(text))
-"""for item in text_processor.hashed_slices_list:
-    print(item)"""
+
+    def load_debug_list(self):
+        # func loads debug_list from pickle file
+        if os.path.exists("linkedin_list_for_debug"):   # TODO: consider using try except
+            with open("linkedin_list_for_debug", 'rb') as debug_list_file:
+                self.debug_linkedin_list = pickle.load(debug_list_file)
+
+
+    def print_job_entry(self, entry):
+        job_title = entry.split('\n', 1)[0]
+        company_name = entry.split('\n', 2)[1]
+        print("company name is:", company_name)
+        print("job title is:", job_title)
+        print("\n")
+
+
+if __name__ == "__main__":
+    with open('test.txt', 'r') as f:
+        text = f.read()
+    text_processor = TextProcessor()
+    #text_processor.create_text_slices_list_for_hashing()
+    text_processor.get_sequences_for_text_slicing_val()
+    text_processor.create_hashed_slices_list()
+    #print("DEBUG: testing load from pickle file:   data_storage_dict: ", new.data_storage_dict)
+
+    # run crawler to create debug Linkedin list
+    if not os.path.exists("linkedin_list_for_debug"):
+        new_crawler = crawler.Crawler()
+        new_crawler.login()
+        new_crawler.is_security_check()
+        if not new_crawler.security_check_on_login:
+            new_crawler.job_search()
+            time.sleep(2)
+            new_crawler.filter()
+            time.sleep(2)
+            new_crawler.find_offers()
+        else:
+            print("Security check active..")        # TODO: add code that deals with security check
+            time.sleep(10)
+            new_crawler.pass_security_check()
+
+        if len(new_crawler.jobs_with_description) > 0:      # no security check and some jobs were found
+            text_processor.save_debug_list_to_pickle_file(new_crawler.jobs_with_description, "linkedin_list_for_debug")
+
+    text_processor.load_debug_list()
+    print("Jobs num in debug_list is: ", len(text_processor.debug_linkedin_list))
+    print("Jobs in debug_list:\n ", text_processor.debug_linkedin_list)
+    for entry in text_processor.debug_linkedin_list:
+        text_processor.print_job_entry(entry[0])
+
+    for index in range(5):
+        curr_element = text_processor.debug_linkedin_list[index]
+        text_processor.update_db_entry(text_processor.exact_match_db_dict_path, "intel", curr_element[0].split('\n', 1)[0], curr_element[1].split('\n', 1)[1])
+    print(text_processor.exact_match_db_dict)
+
+    # Debug Zone
+    #print("DEBUG: Slices list length", len(text_processor.text_slices_list_for_hashing))
+    #print("DEBUG: Text length:", len(text))
 
