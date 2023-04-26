@@ -95,9 +95,14 @@ class Crawler:
             title.click()
             time.sleep(1)
             description = self.browser.find_element(By.CLASS_NAME, 'jobs-description-content__text')
+            details = self.browser.find_element(By.CLASS_NAME, 'mt5.mb2')
             #print(f'{index}, {job.text},{description.text} \n \n \n')
-            job_with_description = [job.text, description.text]
+            job_with_description = [job.text, details.text, description.text]
             self.jobs_with_description.append(job_with_description)
+
+        test_job = self.jobs_with_description[0]
+        details = test_job[1]
+        print("Job details: ", details)
 
         # if there is more than one page - find page and get all jobs from that page
         """if total_results_int > 24:
@@ -126,8 +131,9 @@ class Crawler:
                     title.click()
                     time.sleep(1)
                     description = self.browser.find_element(By.CLASS_NAME, 'jobs-description-content__text')
+                    details = self.browser.find_element(By.CLASS_NAME, 'mt5.mb2')
                     #print(f'{index}, {result_ext.text},{description.text} \n \n \n')
-                    job_with_description = [result_ext.text, description.text]
+                    job_with_description = [job.text, details.text, description.text]
                     self.jobs_with_description.append(job_with_description)"""
 
         print("Jobs num in list:", len(self.jobs_with_description))

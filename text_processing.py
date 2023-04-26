@@ -14,6 +14,8 @@ class TextProcessor:
     partial_hash_val = False
     approximate_match_db_dict_path = 'job_listings_db'
     exact_match_db_dict_path = 'job_listings_exact_match_db'
+    approximate_match_db_dict_val = True
+    exact_match_db_dict_val = False
 
     def __init__(self):
         self.input_text = ""    # TODO: change to input list with job listings
@@ -76,9 +78,9 @@ class TextProcessor:
                 db_dict = pickle.load(db_file)
 
 
-    def update_db_entry(self, db_to_update, company_name, job_title, job_description):  # TODO: debug func
-        # func updates desired db_dict - approximate db is updated with
-        if db_to_update == self.approximate_match_db_dict:
+    def update_db_entry(self, update_approximate_db, company_name, job_title, job_details1, job_details2, job_description):  # TODO: debug func
+        # func updates desired db_dict - exact db is updated with EntryExactDB object,
+        if update_approximate_db:
             self.create_text_slices_list_for_hashing(job_description)
             self.create_hashed_slices_list()
             if company_name in self.approximate_match_db_dict:
@@ -88,17 +90,31 @@ class TextProcessor:
             with open(self.approximate_match_db_dict_path, "wb") as db_dict_file:  # TODO: check if possible, check if needed to separate
                 pickle.dump(self.approximate_match_db_dict, db_dict_file)
 
-        else:       # db_to_update == self.exact_match_db_dict
+        else:       # update exact db
             job_title_hash = self.calculate_hash_val(job_title, self.full_hash_val)
             job_description_hash = self.calculate_hash_val(job_description, self.full_hash_val)
             job_title_description_hash_tuple = (job_title_hash, job_description_hash)
+            job_exact_db_entry = EntryExactDB(job_title, job_details1, job_details2, job_description, job_title_description_hash_tuple)
             if company_name in self.exact_match_db_dict:
-                self.exact_match_db_dict[company_name].append(job_title_description_hash_tuple)
+                self.exact_match_db_dict[company_name].append(job_exact_db_entry)
             else:
-                self.exact_match_db_dict[company_name] = [job_title_description_hash_tuple]
+                self.exact_match_db_dict[company_name] = [job_exact_db_entry]
 
             with open(self.exact_match_db_dict_path, "wb") as db_dict_file:       # TODO: check if possible, check if needed to separate
                 pickle.dump(self.exact_match_db_dict, db_dict_file)
+
+
+    def update_list_of_entries_in_exact_match_db(self, list_of_db_entries):
+        for index in range(len(list_of_db_entries)):
+            curr_element = list_of_db_entries[index]
+            curr_job_title = curr_element[0].split('\n', 1)[0]
+            curr_company_name = curr_element[0].split('\n', 2)[1]
+            curr_job_details1 = curr_element[0]                     # TODO: find better var name
+            curr_job_details2 = curr_element[1]                     # TODO: find better var name
+            curr_job_description = curr_element[2]
+            self.update_db_entry(self.exact_match_db_dict_val, curr_company_name, curr_job_title, curr_job_details1,
+                                 curr_job_details2, curr_job_description)
+
 
     def save_db_dict_to_pickle_file(self, db_dict, db_dict_path):
         # func saves db_dict to pickle file
@@ -140,6 +156,17 @@ class TextProcessor:
         print("\n")
 
 
+class EntryExactDB:
+    # class contains attributes of exact DB entries - title, details, description and calculated
+    # job_title_description_hash_tuple that is used for fast comparison between new job and jobs already in DB
+    def __init__(self, job_title, job_details1, job_details2, job_description,  job_title_description_hash_tuple):
+        self.job_title = job_title
+        self.job_details1 = job_details1
+        self.job_details2 = job_details2
+        self.job_description = job_description
+        self.title_and_total_hash_tuple = job_title_description_hash_tuple
+
+
 if __name__ == "__main__":
     with open('test.txt', 'r') as f:
         text = f.read()
@@ -170,14 +197,11 @@ if __name__ == "__main__":
 
     text_processor.load_debug_list()
     print("Jobs num in debug_list is: ", len(text_processor.debug_linkedin_list))
-    print("Jobs in debug_list:\n ", text_processor.debug_linkedin_list)
-    for entry in text_processor.debug_linkedin_list:
-        text_processor.print_job_entry(entry[0])
-
-    for index in range(5):
-        curr_element = text_processor.debug_linkedin_list[index]
-        text_processor.update_db_entry(text_processor.exact_match_db_dict_path, "intel", curr_element[0].split('\n', 1)[0], curr_element[1].split('\n', 1)[1])
-    print(text_processor.exact_match_db_dict)
+    #print("Jobs in debug_list:\n ", text_processor.debug_linkedin_list)
+    #print(text_processor.debug_linkedin_list[:5])
+    text_processor.update_list_of_entries_in_exact_match_db(text_processor.debug_linkedin_list[:5])
+    print("\nexact_match_db_dict: ", text_processor.exact_match_db_dict)
+    print("\nLen of exact_match_db_dict: ", len(text_processor.exact_match_db_dict))
 
     # Debug Zone
     #print("DEBUG: Slices list length", len(text_processor.text_slices_list_for_hashing))
